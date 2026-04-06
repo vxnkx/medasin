@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-#   GHOST SHIELD — Cyber Defense Toolkit v1.0
+#   MEDASIN — Cyber Defense Toolkit v1.0
 #   Personal protection | Anonymity | Anti-Phishing
 # ============================================================
 
@@ -110,13 +110,13 @@ tool_01() {
     local PROXY;   PROXY=$(echo "$GEO"   | jq -r '.proxy'   2>/dev/null)
     local HOSTING; HOSTING=$(echo "$GEO" | jq -r '.hosting' 2>/dev/null)
 
-    result_warn "Ubicación visible" "$CITY, $COUNTRY"
-    result_info "Tu ISP visible"    "$ISP"
+    result_warn "Visible location" "$CITY, $COUNTRY"
+    result_info "Your visible ISP"    "$ISP"
 
     if [[ "$PROXY" == "true" ]]; then
-        result_ok "Proxy/VPN detectada" "Sí — algo te cubre"
+        result_ok "Proxy/VPN detected" "Yes — something is covering you."
     else
-        result_bad "Proxy/VPN detectada" "No — estás desnudo en internet"
+        result_bad "Proxy/VPN detected" "No — you're naked on the internet lol"
     fi
 
     echo ""
@@ -131,35 +131,35 @@ tool_01() {
     if [[ "$DNS_LOCAL" == "1.1.1.1" || "$DNS_LOCAL" == "1.0.0.1" ]]; then
         result_ok  "DNS local configurado" "$DNS_LOCAL (Cloudflare — bueno)"
     elif [[ "$DNS_LOCAL" == "8.8.8.8" || "$DNS_LOCAL" == "8.8.4.4" ]]; then
-        result_warn "DNS local configurado" "$DNS_LOCAL (Google — registra queries)"
+        result_warn "DNS local configuration" "$DNS_LOCAL (Google — records queries)"
     else
-        result_warn "DNS local configurado" "$DNS_LOCAL"
+        result_warn "DNS local configuration" "$DNS_LOCAL"
     fi
 
     echo ""
     echo -e "  ${C}── TOR / VPN ──${N}"
     local TOR_CHECK; TOR_CHECK=$(curl -s --max-time 6 "https://check.torproject.org/api/ip" | jq -r '.IsTor' 2>/dev/null)
     if [[ "$TOR_CHECK" == "true" ]]; then
-        result_ok "TOR activo" "Sí — tu tráfico va por TOR"
+        result_ok "TOR active" "Yes — your traffic goes through TOR"
     else
-        result_bad "TOR activo" "No"
+        result_bad "TOR active" "No"
     fi
 
     echo ""
-    echo -e "  ${C}── Puertos abiertos en tu máquina ──${N}"
+    echo -e "  ${C}── Open ports on your machine ──${N}"
     if command -v ss &>/dev/null; then
         local OPEN_PORTS; OPEN_PORTS=$(ss -tlnp 2>/dev/null | grep LISTEN | awk '{print $4}' | grep -oE '[0-9]+$' | sort -u | tr '\n' ' ')
         if [[ -n "$OPEN_PORTS" ]]; then
-            result_warn "Puertos escuchando" "$OPEN_PORTS"
+            result_warn "Ports listening" "$OPEN_PORTS"
         else
-            result_ok "Puertos abiertos" "Ninguno detectado"
+            result_ok "Open ports" "None detected"
         fi
     fi
 
     echo ""
-    echo -e "  ${Y}${BOLD}RESUMEN:${N}"
-    echo -e "  ${D}Si ves tu IP real y no hay VPN/TOR, cualquiera con tus links${N}"
-    echo -e "  ${D}puede saber tu ciudad, ISP y rastrearte. Usa la opción 03.${N}"
+    echo -e "  ${Y}${BOLD}SUMMARY:${N}"
+    echo -e "  ${D}If you see your real IP address and there's no VPN/TOR, anyone can use your links.${N}"
+    echo -e "  ${D}It can find out your city, ISP, and track you. Use option 03${N}"
     pause
 }
 
@@ -167,23 +167,23 @@ tool_01() {
 # 02 — ANTI-PHISHING
 # ══════════════════════════════════════════════════════════════
 tool_02() {
-    section "02 · Este link me quiere robar? (Anti-Phishing)"
-    echo -ne "  ${W}Pega el link sospechoso: ${C}"; read -r URL; echo -e "${N}"
-    if [[ -z "$URL" ]]; then result_bad "Error" "No ingresaste URL"; pause; return; fi
+    section "02 · Is this link trying to scam me? (Anti-Phishing)"
+    echo -ne "  ${W}Paste the suspicious link: ${C}"; read -r URL; echo -e "${N}"
+    if [[ -z "$URL" ]]; then result_bad "Error" "You did not enter a URL"; pause; return; fi
 
-    # Asegurar esquema
+    # Secure scheme
     [[ "$URL" != http* ]] && URL="https://$URL"
 
     local DOMAIN; DOMAIN=$(echo "$URL" | sed 's|https\?://||' | cut -d'/' -f1 | sed 's/^www\.//')
     echo -e "  ${Y}Analizando: ${W}$DOMAIN${N}"
     echo ""
 
-    # 1. Verificar en VirusTotal (sin key, endpoint público)
+    # 1. Check on VirusTotal (no key, public endpoint
     echo -e "  ${C}── Verificación de reputación ──${N}"
     local VT_URL; VT_URL=$(echo -n "$URL" | base64 | tr '+/' '-_' | tr -d '=')
     result_info "VirusTotal (abrir)" "https://www.virustotal.com/gui/url/$(echo -n "$URL" | sha256sum | awk '{print $1}')/detection"
 
-    # 2. Google Safe Browsing lookup (API pública)
+    # 2. Google Safe Browsing lookup (public API)
     local GSB; GSB=$(curl -s --max-time 8 \
         "https://transparencyreport.google.com/safe-browsing/search?url=${DOMAIN}&hl=es" 2>/dev/null)
 
@@ -192,16 +192,16 @@ tool_02() {
     result_info "PhishTank (abrir)"   "https://www.phishtank.com/check_phi..."
 
     echo ""
-    echo -e "  ${C}── Análisis automático del link ──${N}"
+    echo -e "  ${C}── Automatic link analysis ──${N}"
 
     # Verificar HTTPS
     if [[ "$URL" == https://* ]]; then
-        result_ok  "Protocolo" "HTTPS — cifrado"
+        result_ok  "Protocol" "HTTPS — encryption"
     else
-        result_bad "Protocolo" "HTTP — SIN cifrado, peligroso"
+        result_bad "HTTP Protocol" — "WITHOUT encryption, dangerous"
     fi
 
-    # Verificar certificado SSL
+    # Verify SSL certificate
     local SSL_INFO; SSL_INFO=$(echo | timeout 5 openssl s_client -connect "${DOMAIN}:443" -servername "$DOMAIN" 2>/dev/null | openssl x509 -noout -issuer -dates 2>/dev/null)
     if [[ -n "$SSL_INFO" ]]; then
         local ISSUER; ISSUER=$(echo "$SSL_INFO" | grep issuer | sed 's/issuer=//')
@@ -210,33 +210,33 @@ tool_02() {
         result_info "Emisor SSL"     "$ISSUER"
         result_info "Expira"         "$EXPIRY"
     else
-        result_warn "Certificado SSL" "No se pudo verificar"
+        result_warn "SSL Certificate" "Could not be verified"
     fi
 
-    # Verificar dominio reciente (WHOIS)
+    # Verify recent domain (WHOIS)
     echo ""
-    echo -e "  ${C}── Edad del dominio ──${N}"
+    echo -e "  ${C}── Age of domination ──${N}"
     if command -v whois &>/dev/null; then
         local CREATION; CREATION=$(whois "$DOMAIN" 2>/dev/null | grep -i "creation date\|created\|registered" | head -1)
         if [[ -n "$CREATION" ]]; then
-            result_info "Fecha creación" "$CREATION"
-            # Si fue creado hace menos de 6 meses, sospechoso
-            echo -e "  ${Y}  ⚠ Dominios muy nuevos (<6 meses) son señal de phishing${N}"
+            result_info "Creation date" "$CREATION"
+            # If it was created less than 6 months ago, suspicious.
+            echo -e "  ${Y}  ⚠ Very new domains (<6 months) They are a sign of phishing${N}"
         fi
     fi
 
-    # Señales de phishing en la URL
+    # Phishing signs in the URL
     echo ""
-    echo -e "  ${C}── Señales de alerta en la URL ──${N}"
+    echo -e "  ${C}── Warning signs in the URL ──${N}"
     local SCORE=0
 
-    # IP en lugar de dominio
+    # IP address instead of domain
     if echo "$DOMAIN" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
         result_bad "URL con IP directa" "MUY sospechoso — phishing típico"
         ((SCORE+=3))
     fi
 
-    # Demasiados guiones
+    # Too many scripts
     local DASHES; DASHES=$(echo "$DOMAIN" | tr -cd '-' | wc -c)
     if [[ $DASHES -ge 3 ]]; then
         result_warn "Muchos guiones en dominio" "$DASHES guiones — sospechoso"
