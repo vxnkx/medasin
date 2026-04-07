@@ -94,7 +94,7 @@ tool_01() {
     echo -e "  ${Y}Analyzing your current exposure...${N}"
     echo ""
 
-    # IP pública
+    # Public IP
     local IP; IP=$(curl -s --max-time 6 ifconfig.me 2>/dev/null)
     if [[ -n "$IP" ]]; then
         result_warn "Your visible public IP address" "$IP"
@@ -123,17 +123,17 @@ tool_01() {
     echo -e "  ${C}── DNS Leak Check ──${N}"
     local DNS1; DNS1=$(curl -s --max-time 5 "https://dns.google/resolve?name=whoami.akamai.net&type=A" | jq -r '.Answer[0].data' 2>/dev/null)
     if [[ -n "$DNS1" && "$DNS1" != "null" ]]; then
-        result_warn "Tu DNS resolver visible" "$DNS1"
+        result_warn "Your visible DNS resolver" "$DNS1"
     fi
 
-    # DNS local
+    # Local DNS
     local DNS_LOCAL; DNS_LOCAL=$(cat /etc/resolv.conf 2>/dev/null | grep nameserver | awk '{print $2}' | head -1)
     if [[ "$DNS_LOCAL" == "1.1.1.1" || "$DNS_LOCAL" == "1.0.0.1" ]]; then
-        result_ok  "DNS local configurado" "$DNS_LOCAL (Cloudflare — bueno)"
+        result_ok  "Local DNS configured" "$DNS_LOCAL (Cloudflare — good)"
     elif [[ "$DNS_LOCAL" == "8.8.8.8" || "$DNS_LOCAL" == "8.8.4.4" ]]; then
-        result_warn "DNS local configuration" "$DNS_LOCAL (Google — records queries)"
+        result_warn "Local DNS configuration" "$DNS_LOCAL (Google — logs queries)"
     else
-        result_warn "DNS local configuration" "$DNS_LOCAL"
+        result_warn "Local DNS configuration" "$DNS_LOCAL"
     fi
 
     echo ""
@@ -175,30 +175,30 @@ tool_02() {
     [[ "$URL" != http* ]] && URL="https://$URL"
 
     local DOMAIN; DOMAIN=$(echo "$URL" | sed 's|https\?://||' | cut -d'/' -f1 | sed 's/^www\.//')
-    echo -e "  ${Y}Analizando: ${W}$DOMAIN${N}"
+    echo -e "  ${Y}Analyzing: ${W}$DOMAIN${N}"
     echo ""
 
     # 1. Check on VirusTotal (no key, public endpoint
-    echo -e "  ${C}── Verificación de reputación ──${N}"
+    echo -e "  ${C}── Reputation check ──${N}"
     local VT_URL; VT_URL=$(echo -n "$URL" | base64 | tr '+/' '-_' | tr -d '=')
-    result_info "VirusTotal (abrir)" "https://www.virustotal.com/gui/url/$(echo -n "$URL" | sha256sum | awk '{print $1}')/detection"
+    result_info "VirusTotal (open)" "https://www.virustotal.com/gui/url/$(echo -n "$URL" | sha256sum | awk '{print $1}')/detection"
 
     # 2. Google Safe Browsing lookup (public API)
     local GSB; GSB=$(curl -s --max-time 8 \
         "https://transparencyreport.google.com/safe-browsing/search?url=${DOMAIN}&hl=es" 2>/dev/null)
 
     # 3. URLScan.io
-    result_info "URLScan.io (abrir)"  "https://urlscan.io/search/#domain:${DOMAIN}"
-    result_info "PhishTank (abrir)"   "https://www.phishtank.com/check_phi..."
+    result_info "URLScan.io (open)"  "https://urlscan.io/search/#domain:${DOMAIN}"
+    result_info "PhishTank (open)"   "https://www.phishtank.com/check_phi..."
 
     echo ""
     echo -e "  ${C}── Automatic link analysis ──${N}"
 
-    # Verificar HTTPS
+    # Check HTTPS
     if [[ "$URL" == https://* ]]; then
         result_ok  "Protocol" "HTTPS — encryption"
     else
-        result_bad "HTTP Protocol" — "WITHOUT encryption, dangerous"
+        result_bad "HTTP Protocol" "WITHOUT encryption, dangerous"
     fi
 
     # Verify SSL certificate
@@ -206,16 +206,16 @@ tool_02() {
     if [[ -n "$SSL_INFO" ]]; then
         local ISSUER; ISSUER=$(echo "$SSL_INFO" | grep issuer | sed 's/issuer=//')
         local EXPIRY; EXPIRY=$(echo "$SSL_INFO" | grep "notAfter" | sed 's/notAfter=//')
-        result_ok  "Certificado SSL" "Válido"
-        result_info "Emisor SSL"     "$ISSUER"
-        result_info "Expira"         "$EXPIRY"
+        result_ok  "SSL Certificate" "Valid"
+        result_info "SSL Issuer"     "$ISSUER"
+        result_info "Expires"         "$EXPIRY"
     else
         result_warn "SSL Certificate" "Could not be verified"
     fi
 
     # Verify recent domain (WHOIS)
     echo ""
-    echo -e "  ${C}── Age of domination ──${N}"
+    echo -e "  ${C}── Domain age ──${N}"
     if command -v whois &>/dev/null; then
         local CREATION; CREATION=$(whois "$DOMAIN" 2>/dev/null | grep -i "creation date\|created\|registered" | head -1)
         if [[ -n "$CREATION" ]]; then
@@ -232,51 +232,51 @@ tool_02() {
 
     # IP address instead of domain
     if echo "$DOMAIN" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
-        result_bad "URL con IP directa" "MUY sospechoso — phishing típico"
+        result_bad "URL with direct IP" "VERY suspicious — typical phishing"
         ((SCORE+=3))
     fi
 
-    # Too many scripts
+    # Too many dashes
     local DASHES; DASHES=$(echo "$DOMAIN" | tr -cd '-' | wc -c)
     if [[ $DASHES -ge 3 ]]; then
-        result_warn "Muchos guiones en dominio" "$DASHES guiones — sospechoso"
+        result_warn "Too many dashes in domain" "$DASHES dashes — suspicious"
         ((SCORE+=2))
     fi
 
-    # Palabras clave de phishing
+    # Phishing keywords
     local PHISH_WORDS=("login" "verify" "secure" "account" "update" "bank" "paypal" "netflix" "amazon" "apple" "microsoft" "google" "signin" "password" "confirm" "wallet" "crypto" "urgent" "suspended" "validate")
     for WORD in "${PHISH_WORDS[@]}"; do
         if echo "$URL" | grep -qi "$WORD"; then
-            result_warn "Palabra sospechosa detectada" "'$WORD' en la URL"
+            result_warn "Suspicious word detected" "'$WORD' in the URL"
             ((SCORE++))
         fi
     done
 
-    # URL muy larga
+    # Very long URL
     if [[ ${#URL} -gt 100 ]]; then
-        result_warn "URL muy larga" "${#URL} caracteres — intento de ofuscar"
+        result_warn "Very long URL" "${#URL} characters — obfuscation attempt"
         ((SCORE++))
     fi
 
-    # Subdominios excesivos
+    # Excessive subdomains
     local SUBDOMAIN_COUNT; SUBDOMAIN_COUNT=$(echo "$DOMAIN" | tr -cd '.' | wc -c)
     if [[ $SUBDOMAIN_COUNT -ge 3 ]]; then
-        result_warn "Subdominios excesivos" "$SUBDOMAIN_COUNT niveles — técnica de engaño"
+        result_warn "Excessive subdomains" "$SUBDOMAIN_COUNT levels — deception technique"
         ((SCORE+=2))
     fi
 
     echo ""
-    echo -e "  ${C}── Veredicto ──${N}"
+    echo -e "  ${C}── Verdict ──${N}"
     if [[ $SCORE -eq 0 ]]; then
-        result_ok  "Puntuación de riesgo" "0 — Parece seguro"
+        result_ok  "Risk score" "0 — Seems safe"
     elif [[ $SCORE -le 2 ]]; then
-        result_warn "Puntuación de riesgo" "$SCORE — Precaución"
+        result_warn "Risk score" "$SCORE — Caution"
     else
-        result_bad  "Puntuación de riesgo" "$SCORE — MUY SOSPECHOSO, no abras"
+        result_bad  "Risk score" "$SCORE — VERY SUSPICIOUS, don't open"
     fi
 
     echo ""
-    echo -e "  ${C}── Abre estos para verificación manual ──${N}"
+    echo -e "  ${C}── Open these for manual verification ──${N}"
     result_info "VirusTotal"  "https://www.virustotal.com/gui/url-upload"
     result_info "URLVoid"     "https://www.urlvoid.com/scan/${DOMAIN}"
     result_info "ScamAdviser" "https://www.scamadviser.com/check-website/${DOMAIN}"
@@ -284,50 +284,50 @@ tool_02() {
 }
 
 # ══════════════════════════════════════════════════════════════
-# 03 — MODO FANTASMA
+# 03 — GHOST MODE
 # ══════════════════════════════════════════════════════════════
 tool_03() {
-    section "03 · Activa el modo fantasma (TOR + DNS seguro)"
-    echo -e "  ${Y}Esta opción configura tu sistema para mayor anonimato.${N}"
+    section "03 · Activate ghost mode (TOR + secure DNS)"
+    echo -e "  ${Y}This option configures your system for greater anonymity.${N}"
     echo ""
 
-    echo -e "  ${C}── Estado actual de TOR ──${N}"
+    echo -e "  ${C}── Current TOR status ──${N}"
     if command -v tor &>/dev/null; then
-        result_ok "TOR instalado" "Sí"
+        result_ok "TOR installed" "Yes"
         if systemctl is-active tor &>/dev/null 2>&1; then
-            result_ok "Servicio TOR" "Activo"
+            result_ok "TOR service" "Active"
         else
-            result_warn "Servicio TOR" "Inactivo"
+            result_warn "TOR service" "Inactive"
             echo ""
-            echo -ne "  ${W}¿Iniciar TOR ahora? (s/n): ${C}"; read -r RESP
-            if [[ "$RESP" == "s" || "$RESP" == "S" ]]; then
+            echo -ne "  ${W}Start TOR now? (y/n): ${C}"; read -r RESP
+            if [[ "$RESP" == "s" || "$RESP" == "S" || "$RESP" == "y" || "$RESP" == "Y" ]]; then
                 sudo systemctl start tor
                 sleep 2
                 if systemctl is-active tor &>/dev/null 2>&1; then
-                    result_ok "TOR" "Iniciado correctamente"
+                    result_ok "TOR" "Started successfully"
                 else
-                    result_bad "TOR" "Error al iniciar"
+                    result_bad "TOR" "Failed to start"
                 fi
             fi
         fi
     else
-        result_bad "TOR instalado" "No"
-        echo -e "  ${Y}  Instala con: sudo pacman -S tor${N}"
+        result_bad "TOR installed" "No"
+        echo -e "  ${Y}  Install with: sudo pacman -S tor${N}"
     fi
 
     echo ""
-    echo -e "  ${C}── DNS Seguro (anti-espionaje) ──${N}"
+    echo -e "  ${C}── Secure DNS (anti-spying) ──${N}"
     local CURRENT_DNS; CURRENT_DNS=$(grep nameserver /etc/resolv.conf 2>/dev/null | awk '{print $2}' | head -1)
-    result_info "DNS actual" "$CURRENT_DNS"
+    result_info "Current DNS" "$CURRENT_DNS"
 
     echo ""
-    echo -e "  ${W}Selecciona DNS seguro a configurar:${N}"
-    echo -e "  ${G}[1]${N} Cloudflare 1.1.1.1 (rápido, privado)"
-    echo -e "  ${G}[2]${N} Quad9 9.9.9.9 (bloquea malware)"
-    echo -e "  ${G}[3]${N} DNS.Watch 84.200.69.80 (sin logs)"
-    echo -e "  ${G}[4]${N} No cambiar"
+    echo -e "  ${W}Select secure DNS to configure:${N}"
+    echo -e "  ${G}[1]${N} Cloudflare 1.1.1.1 (fast, private)"
+    echo -e "  ${G}[2]${N} Quad9 9.9.9.9 (blocks malware)"
+    echo -e "  ${G}[3]${N} DNS.Watch 84.200.69.80 (no logs)"
+    echo -e "  ${G}[4]${N} Don't change"
     echo ""
-    echo -ne "  ${W}Opción: ${C}"; read -r DNS_OPT
+    echo -ne "  ${W}Option: ${C}"; read -r DNS_OPT
     case "$DNS_OPT" in
         1) NEW_DNS="1.1.1.1"; DNS_NAME="Cloudflare" ;;
         2) NEW_DNS="9.9.9.9"; DNS_NAME="Quad9" ;;
@@ -337,58 +337,58 @@ tool_03() {
 
     if [[ -n "$NEW_DNS" ]]; then
         echo ""
-        echo -ne "  ${Y}¿Aplicar DNS ${DNS_NAME} (${NEW_DNS})? Requiere sudo (s/n): ${C}"; read -r CONFIRM
-        if [[ "$CONFIRM" == "s" || "$CONFIRM" == "S" ]]; then
+        echo -ne "  ${Y}Apply ${DNS_NAME} DNS (${NEW_DNS})? Requires sudo (y/n): ${C}"; read -r CONFIRM
+        if [[ "$CONFIRM" == "s" || "$CONFIRM" == "S" || "$CONFIRM" == "y" || "$CONFIRM" == "Y" ]]; then
             echo "nameserver $NEW_DNS" | sudo tee /etc/resolv.conf > /dev/null
-            result_ok "DNS cambiado" "$NEW_DNS ($DNS_NAME)"
+            result_ok "DNS changed" "$NEW_DNS ($DNS_NAME)"
         fi
     fi
 
     echo ""
-    echo -e "  ${C}── Configuración de proxychains ──${N}"
+    echo -e "  ${C}── Proxychains configuration ──${N}"
     if command -v proxychains &>/dev/null || command -v proxychains4 &>/dev/null; then
-        result_ok "Proxychains instalado" "Sí"
-        echo -e "  ${G}▸${N} Usa: ${D}proxychains4 firefox${N}  para navegar anónimo"
-        echo -e "  ${G}▸${N} Usa: ${D}proxychains4 curl ifconfig.me${N}  para verificar"
+        result_ok "Proxychains installed" "Yes"
+        echo -e "  ${G}▸${N} Use: ${D}proxychains4 firefox${N}  to browse anonymously"
+        echo -e "  ${G}▸${N} Use: ${D}proxychains4 curl ifconfig.me${N}  to verify"
     else
-        result_warn "Proxychains" "No instalado"
-        echo -e "  ${Y}  Instala con: sudo pacman -S proxychains-ng${N}"
+        result_warn "Proxychains" "Not installed"
+        echo -e "  ${Y}  Install with: sudo pacman -S proxychains-ng${N}"
     fi
 
     echo ""
-    echo -e "  ${C}── Tips para ser fantasma ──${N}"
-    echo -e "  ${G}▸${N} Usa ${W}Tor Browser${N} para navegar: ${D}sudo pacman -S torbrowser-launcher${N}"
-    echo -e "  ${G}▸${N} Usa ${W}Mullvad VPN${N} (gratis 30 días): ${D}https://mullvad.net${N}"
-    echo -e "  ${G}▸${N} Desactiva ${W}WebRTC${N} en tu navegador (filtra IP real)"
-    echo -e "  ${G}▸${N} Usa ${W}Firefox + uBlock Origin${N} siempre"
-    echo -e "  ${G}▸${N} Nunca uses tu email real, crea alias: ${D}https://simplelogin.io${N}"
+    echo -e "  ${C}── Tips to be a ghost ──${N}"
+    echo -e "  ${G}▸${N} Use ${W}Tor Browser${N} to browse: ${D}sudo pacman -S torbrowser-launcher${N}"
+    echo -e "  ${G}▸${N} Use ${W}Mullvad VPN${N} (free 30 days): ${D}https://mullvad.net${N}"
+    echo -e "  ${G}▸${N} Disable ${W}WebRTC${N} in your browser (leaks real IP)"
+    echo -e "  ${G}▸${N} Use ${W}Firefox + uBlock Origin${N} always"
+    echo -e "  ${G}▸${N} Never use your real email, create aliases: ${D}https://simplelogin.io${N}"
     pause
 }
 
 # ══════════════════════════════════════════════════════════════
-# 04 — ESCANEA TU RED
+# 04 — SCAN MY NETWORK
 # ══════════════════════════════════════════════════════════════
 tool_04() {
-    section "04 · Escanea tu red — quién me está viendo?"
-    echo -e "  ${Y}Escaneando tu red local...${N}"
+    section "04 · Scan my network — who's watching me?"
+    echo -e "  ${Y}Scanning your local network...${N}"
     echo ""
 
-    # Info de interfaces
-    echo -e "  ${C}── Tus interfaces de red ──${N}"
+    # Network interfaces info
+    echo -e "  ${C}── Your network interfaces ──${N}"
     ip addr show 2>/dev/null | grep -E "^[0-9]+:|inet " | while IFS= read -r line; do
         echo -e "  ${C}▸${N} $line"
     done
 
     echo ""
-    echo -e "  ${C}── Tu gateway (router) ──${N}"
+    echo -e "  ${C}── Your gateway (router) ──${N}"
     local GW; GW=$(ip route | grep default | awk '{print $3}' | head -1)
     result_info "Gateway IP" "$GW"
 
     echo ""
-    echo -e "  ${C}── Dispositivos en tu red ──${N}"
+    echo -e "  ${C}── Devices on your network ──${N}"
     if command -v nmap &>/dev/null; then
         local SUBNET; SUBNET=$(ip route | grep -v default | grep src | awk '{print $1}' | head -1)
-        echo -e "  ${Y}Escaneando ${SUBNET}...${N}"
+        echo -e "  ${Y}Scanning ${SUBNET}...${N}"
         echo ""
         nmap -sn "$SUBNET" 2>/dev/null | grep -E "report for|Host is up|MAC Address" | while IFS= read -r line; do
             if echo "$line" | grep -q "report for"; then
@@ -398,19 +398,19 @@ tool_04() {
             fi
         done
     else
-        result_warn "nmap no instalado" "sudo pacman -S nmap"
-        # Alternativa con ping
-        echo -e "  ${Y}Usando ping sweep alternativo...${N}"
+        result_warn "nmap not installed" "sudo pacman -S nmap"
+        # Ping alternative
+        echo -e "  ${Y}Using alternative ping sweep...${N}"
         local BASE_IP; BASE_IP=$(ip route | grep -v default | grep src | awk '{print $1}' | cut -d'/' -f1 | sed 's/\.[0-9]*$//')
         for i in $(seq 1 20); do
             ping -c1 -W1 "${BASE_IP}.${i}" &>/dev/null && \
-                echo -e "  ${G}▸${N} ${W}${BASE_IP}.${i}${N} — ${G}activo${N}" &
+                echo -e "  ${G}▸${N} ${W}${BASE_IP}.${i}${N} — ${G}active${N}" &
         done
         wait
     fi
 
     echo ""
-    echo -e "  ${C}── Conexiones activas salientes ──${N}"
+    echo -e "  ${C}── Active outgoing connections ──${N}"
     if command -v ss &>/dev/null; then
         ss -tnp 2>/dev/null | grep ESTAB | awk '{print $5, $6}' | while IFS= read -r line; do
             echo -e "  ${Y}▸${N} $line"
@@ -418,197 +418,197 @@ tool_04() {
     fi
 
     echo ""
-    echo -e "  ${C}── Puertos abiertos en TU máquina ──${N}"
+    echo -e "  ${C}── Open ports on YOUR machine ──${N}"
     ss -tlnp 2>/dev/null | grep LISTEN | awk '{print $4}' | while IFS= read -r port; do
-        echo -e "  ${Y}⚠${N} Escuchando en: ${W}$port${N}"
+        echo -e "  ${Y}⚠${N} Listening on: ${W}$port${N}"
     done
 
     pause
 }
 
 # ══════════════════════════════════════════════════════════════
-# 05 — LIMPIA MIS RASTROS
+# 05 — CLEAN MY TRACKS
 # ══════════════════════════════════════════════════════════════
 tool_05() {
-    section "05 · Limpia mis rastros digitales ahora"
-    echo -e "  ${Y}Selecciona qué limpiar:${N}"
+    section "05 · Clean my digital tracks now"
+    echo -e "  ${Y}Select what to clean:${N}"
     echo ""
-    echo -e "  ${G}[1]${N} Historial de bash/zsh"
-    echo -e "  ${G}[2]${N} Caché de DNS"
-    echo -e "  ${G}[3]${N} Logs del sistema (requiere sudo)"
-    echo -e "  ${G}[4]${N} Archivos temporales"
-    echo -e "  ${G}[5]${N} Todo lo anterior"
-    echo -e "  ${G}[6]${N} Solo mostrarme qué hay"
+    echo -e "  ${G}[1]${N} Bash/zsh history"
+    echo -e "  ${G}[2]${N} DNS cache"
+    echo -e "  ${G}[3]${N} System logs (requires sudo)"
+    echo -e "  ${G}[4]${N} Temporary files"
+    echo -e "  ${G}[5]${N} All of the above"
+    echo -e "  ${G}[6]${N} Just show me what's there"
     echo ""
-    echo -ne "  ${W}Opción: ${C}"; read -r CLEAN_OPT; echo -e "${N}"
+    echo -ne "  ${W}Option: ${C}"; read -r CLEAN_OPT; echo -e "${N}"
 
     case "$CLEAN_OPT" in
         1|5)
-            echo -e "  ${C}── Limpiando historial de terminal ──${N}"
+            echo -e "  ${C}── Cleaning terminal history ──${N}"
             # Bash
             if [[ -f "$HOME/.bash_history" ]]; then
                 > "$HOME/.bash_history"
-                result_ok "bash_history" "Limpiado"
+                result_ok "bash_history" "Cleaned"
             fi
             # Zsh
             if [[ -f "$HOME/.zsh_history" ]]; then
                 > "$HOME/.zsh_history"
-                result_ok "zsh_history" "Limpiado"
+                result_ok "zsh_history" "Cleaned"
             fi
             history -c 2>/dev/null
-            result_ok "Historial sesión actual" "Limpiado"
+            result_ok "Current session history" "Cleaned"
             [[ "$CLEAN_OPT" != "5" ]] && break
             ;&
         2|5)
-            echo -e "  ${C}── Limpiando caché de DNS ──${N}"
+            echo -e "  ${C}── Cleaning DNS cache ──${N}"
             if systemctl is-active systemd-resolved &>/dev/null; then
-                sudo systemd-resolve --flush-caches 2>/dev/null && result_ok "DNS cache (systemd-resolved)" "Limpiado"
+                sudo systemd-resolve --flush-caches 2>/dev/null && result_ok "DNS cache (systemd-resolved)" "Cleaned"
             fi
             if command -v nscd &>/dev/null; then
-                sudo nscd -i hosts 2>/dev/null && result_ok "DNS cache (nscd)" "Limpiado"
+                sudo nscd -i hosts 2>/dev/null && result_ok "DNS cache (nscd)" "Cleaned"
             fi
-            result_ok "DNS cache local" "Flush enviado"
+            result_ok "Local DNS cache" "Flush sent"
             [[ "$CLEAN_OPT" != "5" ]] && break
             ;&
         3|5)
-            echo -e "  ${C}── Limpiando logs del sistema ──${N}"
-            echo -ne "  ${Y}¿Limpiar logs? Requiere sudo (s/n): ${C}"; read -r LCONF
-            if [[ "$LCONF" == "s" || "$LCONF" == "S" ]]; then
-                sudo journalctl --vacuum-time=1s 2>/dev/null && result_ok "Journalctl logs" "Limpiado"
+            echo -e "  ${C}── Cleaning system logs ──${N}"
+            echo -ne "  ${Y}Clear logs? Requires sudo (y/n): ${C}"; read -r LCONF
+            if [[ "$LCONF" == "s" || "$LCONF" == "S" || "$LCONF" == "y" || "$LCONF" == "Y" ]]; then
+                sudo journalctl --vacuum-time=1s 2>/dev/null && result_ok "Journalctl logs" "Cleaned"
                 sudo truncate -s 0 /var/log/auth.log 2>/dev/null
                 sudo truncate -s 0 /var/log/syslog 2>/dev/null
-                result_ok "Logs del sistema" "Limpiados"
+                result_ok "System logs" "Cleaned"
             fi
             [[ "$CLEAN_OPT" != "5" ]] && break
             ;&
         4|5)
-            echo -e "  ${C}── Limpiando temporales ──${N}"
+            echo -e "  ${C}── Cleaning temporaries ──${N}"
             local TEMP_SIZE; TEMP_SIZE=$(du -sh /tmp 2>/dev/null | awk '{print $1}')
             rm -rf /tmp/* 2>/dev/null
-            result_ok "Archivos en /tmp" "Limpiados ($TEMP_SIZE liberados)"
+            result_ok "Files in /tmp" "Cleaned ($TEMP_SIZE freed)"
             # Thumbnails
             rm -rf "$HOME/.cache/thumbnails"/* 2>/dev/null
-            result_ok "Caché de miniaturas" "Limpiada"
+            result_ok "Thumbnail cache" "Cleaned"
             # Recently used
             > "$HOME/.local/share/recently-used.xbel" 2>/dev/null
-            result_ok "Archivos recientes" "Limpiado"
+            result_ok "Recent files" "Cleaned"
             ;;
         6)
-            echo -e "  ${C}── Inventario de rastros ──${N}"
+            echo -e "  ${C}── Tracks inventory ──${N}"
             local BH_SIZE; BH_SIZE=$(wc -l < "$HOME/.bash_history" 2>/dev/null || echo 0)
-            result_info "Líneas en bash_history"  "$BH_SIZE"
+            result_info "Lines in bash_history"  "$BH_SIZE"
             local ZH_SIZE; ZH_SIZE=$(wc -l < "$HOME/.zsh_history" 2>/dev/null || echo 0)
-            result_info "Líneas en zsh_history"   "$ZH_SIZE"
+            result_info "Lines in zsh_history"   "$ZH_SIZE"
             local TMP_SIZE; TMP_SIZE=$(du -sh /tmp 2>/dev/null | awk '{print $1}')
-            result_info "Tamaño de /tmp"          "$TMP_SIZE"
+            result_info "Size of /tmp"          "$TMP_SIZE"
             local CACHE_SIZE; CACHE_SIZE=$(du -sh "$HOME/.cache" 2>/dev/null | awk '{print $1}')
-            result_info "Caché de usuario"        "$CACHE_SIZE"
+            result_info "User cache"        "$CACHE_SIZE"
             ;;
     esac
     pause
 }
 
 # ══════════════════════════════════════════════════════════════
-# 06 — IDS BÁSICO (detección de ataques)
+# 06 — BASIC IDS (attack detection)
 # ══════════════════════════════════════════════════════════════
 tool_06() {
-    section "06 · Me están atacando? (IDS básico)"
-    echo -e "  ${Y}Analizando logs en busca de ataques...${N}"
+    section "06 · Am I under attack? (Basic IDS)"
+    echo -e "  ${Y}Analyzing logs for attacks...${N}"
     echo ""
 
-    # Intentos SSH fallidos
-    echo -e "  ${C}── Intentos de acceso SSH fallidos ──${N}"
+    # Failed SSH attempts
+    echo -e "  ${C}── Failed SSH login attempts ──${N}"
     local SSH_FAILS
     if [[ -f /var/log/auth.log ]]; then
         SSH_FAILS=$(grep -c "Failed password" /var/log/auth.log 2>/dev/null || echo 0)
-        result_warn "Intentos SSH fallidos (auth.log)" "$SSH_FAILS"
-        echo -e "  ${C}  Top IPs atacantes:${N}"
+        result_warn "Failed SSH attempts (auth.log)" "$SSH_FAILS"
+        echo -e "  ${C}  Top attacking IPs:${N}"
         grep "Failed password" /var/log/auth.log 2>/dev/null | \
             grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | \
             sort | uniq -c | sort -rn | head -5 | \
             while read -r count ip; do
-                result_bad "  $count intentos desde" "$ip"
+                result_bad "  $count attempts from" "$ip"
             done
     else
-        # Arch usa journalctl
+        # Arch uses journalctl
         SSH_FAILS=$(journalctl -u sshd 2>/dev/null | grep -c "Failed password" || echo 0)
-        result_warn "Intentos SSH fallidos (journalctl)" "$SSH_FAILS"
+        result_warn "Failed SSH attempts (journalctl)" "$SSH_FAILS"
         journalctl -u sshd 2>/dev/null | grep "Failed password" | \
             grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | \
             sort | uniq -c | sort -rn | head -5 | \
             while read -r count ip; do
-                result_bad "  $count intentos desde" "$ip"
+                result_bad "  $count attempts from" "$ip"
             done
     fi
 
     echo ""
-    echo -e "  ${C}── Conexiones activas AHORA ──${N}"
+    echo -e "  ${C}── Active connections NOW ──${N}"
     ss -tnp 2>/dev/null | grep ESTAB | while IFS= read -r line; do
         local REMOTE; REMOTE=$(echo "$line" | awk '{print $5}')
-        echo -e "  ${Y}▸${N} Conexión activa: ${W}$REMOTE${N}"
+        echo -e "  ${Y}▸${N} Active connection: ${W}$REMOTE${N}"
     done
 
     echo ""
-    echo -e "  ${C}── Procesos escuchando en red ──${N}"
+    echo -e "  ${C}── Processes listening on network ──${N}"
     ss -tlnp 2>/dev/null | grep LISTEN | while IFS= read -r line; do
         echo -e "  ${Y}▸${N} $line"
     done
 
     echo ""
-    echo -e "  ${C}── Últimos logins al sistema ──${N}"
+    echo -e "  ${C}── Recent system logins ──${N}"
     last 2>/dev/null | head -8 | while IFS= read -r line; do
         echo -e "  ${D}▸${N} $line"
     done
 
     echo ""
-    echo -e "  ${C}── Recomendaciones ──${N}"
-    echo -e "  ${G}▸${N} Instala ${W}fail2ban${N}: sudo pacman -S fail2ban"
-    echo -e "  ${G}▸${N} Instala ${W}ufw${N}: sudo pacman -S ufw && sudo ufw enable"
-    echo -e "  ${G}▸${N} Deshabilita SSH si no lo usas: sudo systemctl disable sshd"
+    echo -e "  ${C}── Recommendations ──${N}"
+    echo -e "  ${G}▸${N} Install ${W}fail2ban${N}: sudo pacman -S fail2ban"
+    echo -e "  ${G}▸${N} Install ${W}ufw${N}: sudo pacman -S ufw && sudo ufw enable"
+    echo -e "  ${G}▸${N} Disable SSH if not using it: sudo systemctl disable sshd"
     pause
 }
 
 # ══════════════════════════════════════════════════════════════
-# 07 — MI CONTRASEÑA FUE ROBADA?
+# 07 — WAS MY PASSWORD STOLEN?
 # ══════════════════════════════════════════════════════════════
 tool_07() {
-    section "07 · Mi contraseña o email fue robado?"
-    echo -e "  ${G}[1]${N} Verificar email en brechas"
-    echo -e "  ${G}[2]${N} Verificar contraseña (hash, sin enviar la contraseña real)"
+    section "07 · Was my password or email stolen?"
+    echo -e "  ${G}[1]${N} Check email in breaches"
+    echo -e "  ${G}[2]${N} Check password (hash, without sending real password)"
     echo ""
-    echo -ne "  ${W}Opción: ${C}"; read -r BREACH_OPT; echo -e "${N}"
+    echo -ne "  ${W}Option: ${C}"; read -r BREACH_OPT; echo -e "${N}"
 
     case "$BREACH_OPT" in
         1)
-            echo -ne "  ${W}Tu email: ${C}"; read -r EMAIL; echo -e "${N}"
-            echo -e "  ${Y}Verificando...${N}"
+            echo -ne "  ${W}Your email: ${C}"; read -r EMAIL; echo -e "${N}"
+            echo -e "  ${Y}Checking...${N}"
             echo ""
-            # HIBP sin API key — link directo
-            result_info "Verifica en HaveIBeenPwned" "https://haveibeenpwned.com/account/${EMAIL}"
-            result_info "Verifica en DeHashed"       "https://dehashed.com/search?query=${EMAIL}"
-            result_info "Verifica en LeakCheck"      "https://leakcheck.io/?query=${EMAIL}"
+            # HIBP without API key — direct link
+            result_info "Check on HaveIBeenPwned" "https://haveibeenpwned.com/account/${EMAIL}"
+            result_info "Check on DeHashed"       "https://dehashed.com/search?query=${EMAIL}"
+            result_info "Check on LeakCheck"      "https://leakcheck.io/?query=${EMAIL}"
             echo ""
-            echo -e "  ${Y}Abre esos links en tu navegador para ver si tu email apareció en brechas.${N}"
+            echo -e "  ${Y}Open those links in your browser to see if your email appeared in breaches.${N}"
             ;;
         2)
-            echo -ne "  ${W}Ingresa tu contraseña (no se envía, solo se hashea localmente): ${C}"
+            echo -ne "  ${W}Enter your password (not sent, only hashed locally): ${C}"
             read -rs PASS; echo -e "${N}"
             echo ""
-            # SHA1 del password, solo primeros 5 caracteres se envían (k-anonymity)
+            # SHA1 of password, only first 5 characters sent (k-anonymity)
             local SHA1; SHA1=$(echo -n "$PASS" | sha1sum | awk '{print $1}' | tr '[:lower:]' '[:upper:]')
             local PREFIX5="${SHA1:0:5}"
             local SUFFIX="${SHA1:5}"
-            echo -e "  ${Y}Consultando HIBP Pwned Passwords (método seguro k-anonymity)...${N}"
-            echo -e "  ${D}  Solo se envían los primeros 5 caracteres del hash SHA1.${N}"
+            echo -e "  ${Y}Querying HIBP Pwned Passwords (secure k-anonymity method)...${N}"
+            echo -e "  ${D}  Only first 5 characters of SHA1 hash are sent.${N}"
             echo ""
             local PWNED_DATA; PWNED_DATA=$(curl -s --max-time 8 "https://api.pwnedpasswords.com/range/${PREFIX5}")
             if echo "$PWNED_DATA" | grep -qi "^${SUFFIX}:"; then
                 local COUNT; COUNT=$(echo "$PWNED_DATA" | grep -i "^${SUFFIX}:" | cut -d':' -f2 | tr -d '[:space:]')
-                result_bad "CONTRASEÑA COMPROMETIDA" "Apareció $COUNT veces en brechas"
-                echo -e "  ${R}  ⚠ CAMBIA ESA CONTRASEÑA AHORA MISMO${N}"
+                result_bad "PASSWORD COMPROMISED" "Appeared $COUNT times in breaches"
+                echo -e "  ${R}  ⚠ CHANGE THAT PASSWORD NOW${N}"
             else
-                result_ok "Contraseña" "No encontrada en brechas conocidas"
-                echo -e "  ${G}  Parece segura, pero no la reutilices.${N}"
+                result_ok "Password" "Not found in known breaches"
+                echo -e "  ${G}  Seems safe, but don't reuse it.${N}"
             fi
             ;;
     esac
@@ -616,211 +616,210 @@ tool_07() {
 }
 
 # ══════════════════════════════════════════════════════════════
-# 08 — GENERA CONTRASEÑA IMPOSIBLE DE HACKEAR
+# 08 — GENERATE UNHACKABLE PASSWORD
 # ══════════════════════════════════════════════════════════════
 tool_08() {
-    section "08 · Genera contraseña imposible de hackear"
-    echo -e "  ${W}Tipo de contraseña:${N}"
-    echo -e "  ${G}[1]${N} Ultra segura (32 chars, símbolos, números)"
-    echo -e "  ${G}[2]${N} Frase de paso (4 palabras random — fácil de recordar)"
-    echo -e "  ${G}[3]${N} PIN de 6 dígitos aleatorio"
-    echo -e "  ${G}[4]${N} Contraseña personalizada (tú eliges longitud)"
+    section "08 · Generate unhackable password"
+    echo -e "  ${W}Password type:${N}"
+    echo -e "  ${G}[1]${N} Ultra secure (32 chars, symbols, numbers)"
+    echo -e "  ${G}[2]${N} Passphrase (4 random words — easy to remember)"
+    echo -e "  ${G}[3]${N} Random 6-digit PIN"
+    echo -e "  ${G}[4]${N} Custom password (you choose length)"
     echo ""
-    echo -ne "  ${W}Opción: ${C}"; read -r PASS_OPT; echo -e "${N}"
+    echo -ne "  ${W}Option: ${C}"; read -r PASS_OPT; echo -e "${N}"
 
     case "$PASS_OPT" in
         1)
-            echo -e "  ${C}── Contraseñas generadas ──${N}"
+            echo -e "  ${C}── Generated passwords ──${N}"
             for i in 1 2 3; do
                 local P; P=$(cat /dev/urandom | tr -dc 'A-Za-z0-9!@#$%^&*()_+-=[]{}|;:,.<>?' | head -c 32)
-                result_ok "Opción $i" "$P"
+                result_ok "Option $i" "$P"
             done
             ;;
         2)
-            # Lista de palabras simples en español
-            local WORDS=("tigre" "nube" "roca" "luna" "fuego" "viento" "piedra" "selva" "rio" "mar" "cielo" "trueno" "rayo" "bosque" "isla" "cima" "valle" "niebla" "alba" "tormenta" "arena" "hielo" "llama" "sombra" "fuerza" "luz" "noche" "alba" "bruma" "volcán")
-            echo -e "  ${C}── Frases de paso generadas ──${N}"
+            # Simple Spanish words list
+            local WORDS=("tiger" "cloud" "rock" "moon" "fire" "wind" "stone" "jungle" "river" "sea" "sky" "thunder" "lightning" "forest" "island" "summit" "valley" "fog" "dawn" "storm" "sand" "ice" "flame" "shadow" "strength" "light" "night" "dawn" "mist" "volcano")
+            echo -e "  ${C}── Generated passphrases ──${N}"
             for i in 1 2 3; do
                 local W1=${WORDS[$RANDOM % ${#WORDS[@]}]}
                 local W2=${WORDS[$RANDOM % ${#WORDS[@]}]}
                 local W3=${WORDS[$RANDOM % ${#WORDS[@]}]}
                 local W4=${WORDS[$RANDOM % ${#WORDS[@]}]}
                 local NUM=$((RANDOM % 900 + 100))
-                result_ok "Opción $i" "${W1}-${W2}-${W3}-${W4}-${NUM}"
+                result_ok "Option $i" "${W1}-${W2}-${W3}-${W4}-${NUM}"
             done
             echo ""
-            echo -e "  ${D}Las frases de paso son igual de seguras y más fáciles de recordar.${N}"
+            echo -e "  ${D}Passphrases are just as secure and easier to remember.${N}"
             ;;
         3)
-            echo -e "  ${C}── PINs generados ──${N}"
+            echo -e "  ${C}── Generated PINs ──${N}"
             for i in 1 2 3; do
                 local PIN; PIN=$(cat /dev/urandom | tr -dc '0-9' | head -c 6)
                 result_ok "PIN $i" "$PIN"
             done
             ;;
         4)
-            echo -ne "  ${W}Longitud deseada (ej: 20): ${C}"; read -r LEN
+            echo -ne "  ${W}Desired length (e.g. 20): ${C}"; read -r LEN
             [[ -z "$LEN" || ! "$LEN" =~ ^[0-9]+$ ]] && LEN=20
-            echo -e "  ${C}── Contraseñas de ${LEN} caracteres ──${N}"
+            echo -e "  ${C}── ${LEN}-character passwords ──${N}"
             for i in 1 2 3; do
                 local P; P=$(cat /dev/urandom | tr -dc 'A-Za-z0-9!@#$%&*_+-' | head -c "$LEN")
-                result_ok "Opción $i" "$P"
+                result_ok "Option $i" "$P"
             done
             ;;
     esac
 
     echo ""
-    echo -e "  ${C}── Gestores de contraseñas recomendados ──${N}"
-    echo -e "  ${G}▸${N} ${W}Bitwarden${N} (gratis, open source): sudo pacman -S bitwarden"
-    echo -e "  ${G}▸${N} ${W}KeePassXC${N} (local, sin nube):     sudo pacman -S keepassxc"
+    echo -e "  ${C}── Recommended password managers ──${N}"
+    echo -e "  ${G}▸${N} ${W}Bitwarden${N} (free, open source): sudo pacman -S bitwarden"
+    echo -e "  ${G}▸${N} ${W}KeePassXC${N} (local, no cloud):     sudo pacman -S keepassxc"
     pause
 }
 
 # ══════════════════════════════════════════════════════════════
-# 09 — CIFRA UN MENSAJE
+# 09 — ENCRYPT A MESSAGE
 # ══════════════════════════════════════════════════════════════
 tool_09() {
-    section "09 · Cifra un mensaje para enviarlo seguro"
-    echo -e "  ${G}[1]${N} Cifrar mensaje (AES-256)"
-    echo -e "  ${G}[2]${N} Descifrar mensaje"
-    echo -e "  ${G}[3]${N} Cifrar archivo"
+    section "09 · Encrypt a message to send securely"
+    echo -e "  ${G}[1]${N} Encrypt message (AES-256)"
+    echo -e "  ${G}[2]${N} Decrypt message"
+    echo -e "  ${G}[3]${N} Encrypt file"
     echo ""
-    echo -ne "  ${W}Opción: ${C}"; read -r ENC_OPT; echo -e "${N}"
+    echo -ne "  ${W}Option: ${C}"; read -r ENC_OPT; echo -e "${N}"
 
     case "$ENC_OPT" in
         1)
-
-            echo -ne "  ${W}Mensaje a cifrar: ${C}"; read -r MSG
-            echo -ne "  ${W}Contraseña secreta: ${C}"; read -rs KEY; echo -e "${N}"
+            echo -ne "  ${W}Message to encrypt: ${C}"; read -r MSG
+            echo -ne "  ${W}Secret password: ${C}"; read -rs KEY; echo -e "${N}"
             echo ""
             local ENCRYPTED; ENCRYPTED=$(echo "$MSG" | openssl enc -aes-256-cbc -pbkdf2 -pass pass:"$KEY" -base64 2>/dev/null)
-            echo -e "  ${C}── Mensaje cifrado (comparte esto) ──${N}"
+            echo -e "  ${C}── Encrypted message (share this) ──${N}"
             echo ""
             echo -e "  ${Y}$ENCRYPTED${N}"
             echo ""
-            echo -e "  ${D}El destinatario necesita la contraseña para descifrar.${N}"
+            echo -e "  ${D}Recipient needs the password to decrypt.${N}"
             ;;
         2)
-            echo -ne "  ${W}Mensaje cifrado (base64): ${C}"; read -r ENC_MSG
-            echo -ne "  ${W}Contraseña: ${C}"; read -rs KEY; echo -e "${N}"
+            echo -ne "  ${W}Encrypted message (base64): ${C}"; read -r ENC_MSG
+            echo -ne "  ${W}Password: ${C}"; read -rs KEY; echo -e "${N}"
             echo ""
             local DECRYPTED; DECRYPTED=$(echo "$ENC_MSG" | openssl enc -aes-256-cbc -pbkdf2 -d -pass pass:"$KEY" -base64 2>/dev/null)
             if [[ -n "$DECRYPTED" ]]; then
-                result_ok "Mensaje descifrado" "$DECRYPTED"
+                result_ok "Decrypted message" "$DECRYPTED"
             else
-                result_bad "Error" "Contraseña incorrecta o mensaje corrupto"
+                result_bad "Error" "Wrong password or corrupted message"
             fi
             ;;
         3)
-            echo -ne "  ${W}Ruta del archivo: ${C}"; read -r FPATH
-            echo -ne "  ${W}Contraseña: ${C}"; read -rs KEY; echo -e "${N}"
-            if [[ ! -f "$FPATH" ]]; then result_bad "Archivo" "No encontrado"; pause; return; fi
+            echo -ne "  ${W}File path: ${C}"; read -r FPATH
+            echo -ne "  ${W}Password: ${C}"; read -rs KEY; echo -e "${N}"
+            if [[ ! -f "$FPATH" ]]; then result_bad "File" "Not found"; pause; return; fi
             local OUT="${FPATH}.enc"
             openssl enc -aes-256-cbc -pbkdf2 -in "$FPATH" -out "$OUT" -pass pass:"$KEY" 2>/dev/null
-            result_ok "Archivo cifrado guardado" "$OUT"
-            echo -e "  ${D}Para descifrar: openssl enc -aes-256-cbc -pbkdf2 -d -in ${OUT} -out archivo_original -pass pass:TU_CLAVE${N}"
+            result_ok "Encrypted file saved" "$OUT"
+            echo -e "  ${D}To decrypt: openssl enc -aes-256-cbc -pbkdf2 -d -in ${OUT} -out original_file -pass pass:YOUR_PASSWORD${N}"
             ;;
     esac
     pause
 }
 
 # ══════════════════════════════════════════════════════════════
-# 10 — DASHBOARD DE DEFENSAS
+# 10 — DEFENSES DASHBOARD
 # ══════════════════════════════════════════════════════════════
 tool_10() {
-    section "10 · Estado de mis defensas (dashboard)"
-    echo -e "  ${W}${BOLD}Verificando tu postura de seguridad...${N}"
+    section "10 · My defenses status (dashboard)"
+    echo -e "  ${W}${BOLD}Checking your security posture...${N}"
     echo ""
 
     local SCORE=0
     local TOTAL=10
 
     # 1. TOR
-    echo -ne "  "; if systemctl is-active tor &>/dev/null 2>&1; then result_ok "TOR" "Activo"; ((SCORE++)); else result_bad "TOR" "Inactivo"; fi
+    echo -ne "  "; if systemctl is-active tor &>/dev/null 2>&1; then result_ok "TOR" "Active"; ((SCORE++)); else result_bad "TOR" "Inactive"; fi
 
     # 2. VPN
     local VPN_ACTIVE=false
     if ip link show | grep -qiE "tun|wg|vpn|proton"; then VPN_ACTIVE=true; fi
-    echo -ne "  "; if $VPN_ACTIVE; then result_ok "VPN" "Detectada"; ((SCORE++)); else result_warn "VPN" "No detectada"; fi
+    echo -ne "  "; if $VPN_ACTIVE; then result_ok "VPN" "Detected"; ((SCORE++)); else result_warn "VPN" "Not detected"; fi
 
     # 3. Firewall UFW
     echo -ne "  "
     if command -v ufw &>/dev/null; then
         local UFW_STATUS; UFW_STATUS=$(sudo ufw status 2>/dev/null | head -1)
-        if echo "$UFW_STATUS" | grep -qi "active"; then result_ok "Firewall (ufw)" "Activo"; ((SCORE++)); else result_bad "Firewall (ufw)" "Instalado pero inactivo"; fi
+        if echo "$UFW_STATUS" | grep -qi "active"; then result_ok "Firewall (ufw)" "Active"; ((SCORE++)); else result_bad "Firewall (ufw)" "Installed but inactive"; fi
     else
-        result_warn "Firewall (ufw)" "No instalado — sudo pacman -S ufw"
+        result_warn "Firewall (ufw)" "Not installed — sudo pacman -S ufw"
     fi
 
     # 4. Fail2ban
     echo -ne "  "
     if command -v fail2ban-client &>/dev/null; then
-        if systemctl is-active fail2ban &>/dev/null; then result_ok "Fail2ban" "Activo"; ((SCORE++)); else result_warn "Fail2ban" "Instalado pero inactivo"; fi
+        if systemctl is-active fail2ban &>/dev/null; then result_ok "Fail2ban" "Active"; ((SCORE++)); else result_warn "Fail2ban" "Installed but inactive"; fi
     else
-        result_warn "Fail2ban" "No instalado — sudo pacman -S fail2ban"
+        result_warn "Fail2ban" "Not installed — sudo pacman -S fail2ban"
     fi
 
-    # 5. DNS seguro
+    # 5. Secure DNS
     echo -ne "  "
     local DNS_NOW; DNS_NOW=$(grep nameserver /etc/resolv.conf 2>/dev/null | awk '{print $2}' | head -1)
     if [[ "$DNS_NOW" == "1.1.1.1" || "$DNS_NOW" == "9.9.9.9" || "$DNS_NOW" == "84.200.69.80" ]]; then
-        result_ok "DNS seguro" "$DNS_NOW"; ((SCORE++))
+        result_ok "Secure DNS" "$DNS_NOW"; ((SCORE++))
     else
-        result_warn "DNS seguro" "$DNS_NOW — considera cambiarlo (opción 03)"
+        result_warn "Secure DNS" "$DNS_NOW — consider changing it (option 03)"
     fi
 
-    # 6. SSH deshabilitado
+    # 6. SSH disabled
     echo -ne "  "
     if systemctl is-active sshd &>/dev/null; then
-        result_warn "SSH" "Activo — superficie de ataque abierta"
+        result_warn "SSH" "Active — attack surface open"
     else
-        result_ok "SSH" "Inactivo"; ((SCORE++))
+        result_ok "SSH" "Inactive"; ((SCORE++))
     fi
 
-    # 7. Actualizaciones pendientes
+    # 7. Pending updates
     echo -ne "  "
     if command -v pacman &>/dev/null; then
         local UPDATES; UPDATES=$(pacman -Qu 2>/dev/null | wc -l)
-        if [[ $UPDATES -eq 0 ]]; then result_ok "Sistema actualizado" "Sí"; ((SCORE++)); else result_warn "Actualizaciones pendientes" "$UPDATES paquetes"; fi
+        if [[ $UPDATES -eq 0 ]]; then result_ok "System updated" "Yes"; ((SCORE++)); else result_warn "Pending updates" "$UPDATES packages"; fi
     fi
 
-    # 8. Historial limpio
+    # 8. Clean history
     echo -ne "  "
     local HIST_LINES; HIST_LINES=$(wc -l < "$HOME/.bash_history" 2>/dev/null || echo 0)
-    if [[ $HIST_LINES -lt 50 ]]; then result_ok "Historial bash" "Limpio ($HIST_LINES líneas)"; ((SCORE++)); else result_warn "Historial bash" "$HIST_LINES líneas expuestas"; fi
+    if [[ $HIST_LINES -lt 50 ]]; then result_ok "Bash history" "Clean ($HIST_LINES lines)"; ((SCORE++)); else result_warn "Bash history" "$HIST_LINES lines exposed"; fi
 
     # 9. Proxychains
     echo -ne "  "
     if command -v proxychains4 &>/dev/null || command -v proxychains &>/dev/null; then
-        result_ok "Proxychains" "Instalado"; ((SCORE++))
+        result_ok "Proxychains" "Installed"; ((SCORE++))
     else
-        result_warn "Proxychains" "No instalado"
+        result_warn "Proxychains" "Not installed"
     fi
 
     # 10. Tor Browser
     echo -ne "  "
     if command -v torbrowser-launcher &>/dev/null || [[ -d "$HOME/.local/share/torbrowser" ]]; then
-        result_ok "Tor Browser" "Instalado"; ((SCORE++))
+        result_ok "Tor Browser" "Installed"; ((SCORE++))
     else
-        result_warn "Tor Browser" "No instalado — sudo pacman -S torbrowser-launcher"
+        result_warn "Tor Browser" "Not installed — sudo pacman -S torbrowser-launcher"
     fi
 
     echo ""
     echo -e "  ${C}══════════════════════════════════════${N}"
     local PCT=$(( SCORE * 100 / TOTAL ))
     if [[ $PCT -ge 80 ]]; then
-        echo -e "  ${G}${BOLD}PUNTUACIÓN: ${SCORE}/${TOTAL} (${PCT}%) — BIEN PROTEGIDO${N}"
+        echo -e "  ${G}${BOLD}SCORE: ${SCORE}/${TOTAL} (${PCT}%) — WELL PROTECTED${N}"
     elif [[ $PCT -ge 50 ]]; then
-        echo -e "  ${Y}${BOLD}PUNTUACIÓN: ${SCORE}/${TOTAL} (${PCT}%) — PROTECCIÓN MEDIA${N}"
+        echo -e "  ${Y}${BOLD}SCORE: ${SCORE}/${TOTAL} (${PCT}%) — MEDIUM PROTECTION${N}"
     else
-        echo -e "  ${R}${BOLD}PUNTUACIÓN: ${SCORE}/${TOTAL} (${PCT}%) — MUY EXPUESTO${N}"
+        echo -e "  ${R}${BOLD}SCORE: ${SCORE}/${TOTAL} (${PCT}%) — VERY EXPOSED${N}"
     fi
     echo -e "  ${C}══════════════════════════════════════${N}"
     pause
 }
 
 # ══════════════════════════════════════════════════════════════
-#  BUCLE PRINCIPAL
+#  MAIN LOOP
 # ══════════════════════════════════════════════════════════════
 while true; do
     main_menu
@@ -838,13 +837,13 @@ while true; do
         0|00)
             clear
             echo ""
-            echo -e "  ${C}${BOLD}  GHOST SHIELD  —  Cerrando.${N}"
-            echo -e "  ${D}  Permanece invisible. 👁${N}"
+            echo -e "  ${C}${BOLD}  GHOST SHIELD  —  Closing.${N}"
+            echo -e "  ${D}  Stay invisible. 👁${N}"
             echo ""
             exit 0
             ;;
         *)
-            echo -e "  ${R}Opción inválida.${N}"
+            echo -e "  ${R}Invalid option.${N}"
             sleep 1
             ;;
     esac
