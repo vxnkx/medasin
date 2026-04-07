@@ -37,6 +37,25 @@ Kali Commands to paste when script suggests:
 ```
 sudo apt install tor proxychains nmap jq
 ```
+# HOW TO USE THIS ON WINDOWS!
+🥇WSL (recommended)
+Uses Windows Subsystem for Linux
+Steps:
+Install WSL: (in Powershell admin)
+```
+wsl --install
+```
+Open Ubuntu terminal
+Install required tools:
+```
+sudo apt update
+sudo apt install curl jq nmap tor proxychains openssl net-tools
+```
+Run the script:
+```
+chmod +x medasin.sh
+./medasin.sh
+```
 # TOR Browser (Kali bonus)
 ```
 sudo apt install torbrowser-launcher
