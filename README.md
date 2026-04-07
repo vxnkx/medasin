@@ -14,8 +14,9 @@ Legit defensive security toolkit for paranoid Linux users. Teaches good hygiene 
 6. Basic IDS (attack detection)
 7. Password breach check (HIBP)
 8. Password generator
-9. AES-256 encryptor
-And last but not least a Security dashboard (0-100% score)
+9. AES-256 encryptor 
+
+And last but not least 10. Security dashboard (0-100% score)
 
 ### Kali Setup (2 minutes):
 # 1. Save and run
