@@ -20,7 +20,7 @@ And last but not least a Security dashboard (0-100% score)
 ### Kali Setup (2 minutes):
 # 1. Save and run
 ```
-chmod +x ghost-shield.sh
+chmod +x medasin.sh
 ./medasin.sh
 ```
 # 2. Install missing tools (Kali has most already)
